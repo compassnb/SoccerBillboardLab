@@ -1,53 +1,47 @@
 # SoccerBillboardLab
 
-Temporally stable virtual billboard replacement for soccer videos using
-multi-keyframe SAM2 tracking, robust geometric fitting, perspective rendering,
-and foreground occlusion recovery.
+基于多关键帧 SAM2 跟踪、鲁棒几何拟合、透视渲染与前景遮挡恢复的足球视频虚拟广告替换研究原型。
 
-> **Status:** research prototype. The current pipeline has been qualitatively
-> validated on a short soccer clip; it is not a production-ready or real-time
-> system.
-
-## 中文简介
-
-SoccerBillboardLab 是一个足球转播视频虚拟广告替换原型。用户只需在少量关键帧中为每个广告平面添加正负提示点，系统便可追踪广告区域、修复碎裂蒙版、平滑广告几何、进行透视贴图，并恢复运动员和裁判的前景遮挡关系。
+> **项目状态：研究原型。** 当前流程已在一个短足球视频片段上完成定性验证，但尚未进行多数据集定量评测，不是实时系统，也不建议直接用于生产环境。
 
 本项目是独立研究扩展，不是 SoccerMaster 或 SAM2 的官方组件。
 
-## Pipeline
+## 效果流程
 
 ```mermaid
 flowchart LR
-    A[Video frames] --> B[Multi-frame annotation]
-    B --> C[SAM2 Video tracking]
-    C --> D[PCA band fitting]
-    D --> E[Temporal smoothing]
-    E --> F[Perspective ad rendering]
-    A --> G[SoccerMaster detections]
-    G --> H[SAM2 Image foreground masks]
-    F --> I[Foreground restoration]
+    A[足球视频帧] --> B[多对象、多关键帧标注]
+    B --> C[SAM2 Video 广告区域跟踪]
+    C --> D[PCA主方向与鲁棒边缘拟合]
+    D --> E[广告四边形时间平滑]
+    E --> F[广告素材透视渲染]
+    A --> G[SoccerMaster人员检测结果]
+    G --> H[SAM2 Image前景分割]
+    F --> I[恢复人物遮挡]
     H --> I
-    I --> J[Final video]
+    I --> J[最终广告替换视频]
 ```
 
-## Features
+## 主要功能
 
-- Multiple independent billboard planes.
-- Multiple conditioning frames for the same physical billboard.
-- Robust recovery from fragmented raw segmentation masks.
-- Direction-independent fitting for horizontal and slanted billboard bands.
-- Short-window temporal smoothing to reduce visible jitter.
-- Separate advertisement image per billboard object.
-- Person/referee occlusion restoration from SoccerMaster detections.
-- Browser-based annotation tool with no image upload or embedded video data.
+- 支持多个相互独立的广告平面；
+- 支持同一广告位置使用多个关键帧纠正提示；
+- 能够适应同一位置广告内容发生变化的情况；
+- 修复 SAM2 原始蒙版碎裂、局部缺失与边缘毛刺；
+- 基于广告自身主方向拟合，支持水平和倾斜广告带；
+- 对四角位置进行短窗口时间平滑，降低视频抖动；
+- 支持不同广告平面使用不同广告素材；
+- 根据 SoccerMaster 检测框恢复运动员和裁判遮挡；
+- 提供不上传图片、不内嵌比赛画面的本地浏览器标注工具。
 
-## Repository layout
+## 项目结构
 
 ```text
 SoccerBillboardLab/
 ├── README.md
-├── requirements.txt
+├── LICENSE
 ├── THIRD_PARTY_LICENSES.md
+├── requirements.txt
 ├── configs/
 │   ├── example_annotations.json
 │   └── example_ad_map.json
@@ -62,67 +56,116 @@ SoccerBillboardLab/
     └── annotator.html
 ```
 
-## Requirements
+## 环境要求
 
-- Linux is recommended.
-- Python 3.10 or newer.
-- CUDA-capable GPU for SAM2 stages.
-- PyTorch 2.4 or newer.
-- An official SAM2 installation and checkpoint.
-- Optional: a SoccerMaster state archive for foreground restoration.
+- 推荐使用 Linux；
+- Python 3.10 或更高版本；
+- SAM2 阶段需要支持 CUDA 的 NVIDIA GPU；
+- PyTorch 2.4 或更高版本；
+- 官方 SAM2 代码与对应模型权重；
+- 可选：SoccerMaster 输出的状态压缩包，用于人物遮挡恢复。
 
-## Installation
+本项目最初验证环境为：
 
-Create and activate your own Python environment, then install the basic
-dependencies:
+```text
+Python 3.10
+PyTorch 2.4.1+cu121
+NVIDIA RTX 4090D 24GB
+```
+
+## 安装
+
+克隆本仓库：
+
+```bash
+git clone https://github.com/compassnb/SoccerBillboardLab.git
+cd SoccerBillboardLab
+```
+
+建议在独立的 Conda 或 Python 虚拟环境中安装依赖：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Install SAM2 by following the official repository:
+按照 SAM2 官方仓库说明安装 SAM2：
 
 ```text
 https://github.com/facebookresearch/sam2
 ```
 
-Download a compatible SAM2 checkpoint using the official instructions. Model
-weights are not included in this repository.
+一种常见安装方式为：
 
-## Data preparation
+```bash
+mkdir -p external
+git clone https://github.com/facebookresearch/sam2.git external/sam2
+pip install -e external/sam2
+```
 
-Extract a video into sequentially named frames. For example:
+请按照 SAM2 官方说明下载对应模型权重。本仓库不提供模型权重。
+
+## 准备视频帧
+
+首先将视频拆分成连续编号的图片，例如：
 
 ```bash
 mkdir -p data/frames
-ffmpeg -i input.mp4 -q:v 2 data/frames/%06d.jpg
+
+ffmpeg -i input.mp4 \
+  -q:v 2 \
+  data/frames/%06d.jpg
 ```
 
-Do not commit datasets, match footage, extracted frames, checkpoints, or model
-state archives to Git.
-
-## 1. Annotate billboard planes
-
-Open `tools/annotator.html` with Chrome or Edge, choose the frame directory,
-and add positive/negative points.
-
-Recommended object convention:
+得到的目录格式类似：
 
 ```text
-1 = far_touchline_billboard
-2 = left_goal_line_billboard
-3 = right_goal_line_billboard
-4 = near_touchline_billboard
-5+ = additional independent billboard planes
+data/frames/
+├── 000001.jpg
+├── 000002.jpg
+├── 000003.jpg
+└── ...
 ```
 
-Use the same object ID when the advertisement content changes at the same
-physical location. Add another conditioning frame instead of creating a new
-object.
+请勿将比赛视频、数据集、拆分帧、模型权重或状态文件提交到 GitHub。
 
-Export the result as `board_annotations.json`.
+## 第一步：标注广告平面
 
-## 2. Track raw billboard masks
+使用 Chrome 或 Edge 打开：
+
+```text
+tools/annotator.html
+```
+
+在页面中选择视频帧文件夹，然后为广告添加正样本点和负样本点。
+
+推荐对象编号：
+
+```text
+1 = far_touchline_billboard，远侧边线广告
+2 = left_goal_line_billboard，左侧底线广告
+3 = right_goal_line_billboard，右侧底线广告
+4 = near_touchline_billboard，近侧边线广告
+5及以上 = 其他独立广告平面
+```
+
+同一物理位置的广告即使内容发生变化，也应继续使用同一个对象 ID，只需在变化后的帧增加一组纠正提示。
+
+标注建议：
+
+- 每个对象、每个关键帧通常使用 5～12 个分布合理的正样本点；
+- 在广告上方、下方、两端外侧以及相邻平面添加负样本点；
+- 镜头切换、广告重新入画、广告内容变化或跟踪漂移后增加关键帧；
+- 标注不是越密越好，准确且互不矛盾比数量更重要。
+
+标注完成后导出：
+
+```text
+board_annotations.json
+```
+
+`configs/example_annotations.json` 提供了不包含真实比赛数据的格式示例。
+
+## 第二步：跟踪广告原始蒙版
 
 ```bash
 python scripts/track_boards.py \
@@ -132,7 +175,13 @@ python scripts/track_boards.py \
   --output-dir outputs/tracking
 ```
 
-Main outputs:
+如果使用其他图片格式，可通过参数指定，例如：
+
+```bash
+--frame-pattern "*.png"
+```
+
+主要输出：
 
 ```text
 outputs/tracking/raw_masks/
@@ -140,7 +189,7 @@ outputs/tracking/tracking_preview.mp4
 outputs/tracking/tracking_summary.json
 ```
 
-## 3. Fit and stabilize billboard geometry
+## 第三步：拟合并稳定广告几何
 
 ```bash
 python scripts/fit_geometry.py \
@@ -150,7 +199,15 @@ python scripts/fit_geometry.py \
   --output-dir outputs/geometry
 ```
 
-Main outputs:
+该阶段会：
+
+1. 提取广告蒙版的主方向；
+2. 沿主方向分块采样上下边缘；
+3. 进行鲁棒直线拟合；
+4. 填充连续广告带；
+5. 对四个角点进行时间平滑。
+
+主要输出：
 
 ```text
 outputs/geometry/clean_masks/
@@ -158,9 +215,17 @@ outputs/geometry/geometry.json
 outputs/geometry/geometry_comparison.mp4
 ```
 
-## 4. Render replacement advertisements
+`geometry_comparison.mp4` 左侧是 SAM2 原始蒙版，右侧是连续拟合和时间平滑结果。
 
-Use one advertisement for every plane:
+## 第四步：渲染替换广告
+
+将拥有合法使用权的广告图片放入 `assets/`，例如：
+
+```text
+assets/demo_ad.png
+```
+
+为所有广告平面使用同一张素材：
 
 ```bash
 python scripts/render_ads.py \
@@ -171,25 +236,49 @@ python scripts/render_ads.py \
   --output-dir outputs/rendering
 ```
 
-To use a different image for each object, copy
-`configs/example_ad_map.json`, edit its paths, and add:
+主要输出：
+
+```text
+outputs/rendering/replaced_frames/
+outputs/rendering/replacement_no_occlusion.mp4
+outputs/rendering/rendering_summary.json
+```
+
+如果不同广告平面需要使用不同素材，可以复制并修改：
+
+```text
+configs/example_ad_map.json
+```
+
+例如：
+
+```json
+{
+  "1": "../assets/far_touchline_ad.png",
+  "2": "../assets/left_goal_line_ad.png"
+}
+```
+
+运行时增加：
 
 ```bash
 --ad-map configs/ad_map.json
 ```
 
-Main outputs:
+## 第五步：恢复人物前景遮挡（可选）
+
+如果已经拥有 SoccerMaster 输出的 `.pklz` 状态文件，可以用检测框驱动 SAM2 Image，对真正与广告相交的运动员和裁判进行精细分割。
+
+状态压缩包需要包含：
 
 ```text
-outputs/rendering/replaced_frames/
-outputs/rendering/replacement_no_occlusion.mp4
+<video_id>.pkl
+<video_id>_image.pkl
 ```
 
-## 5. Restore foreground people (optional)
+并且标注 JSON 中的 `video_id` 应与文件名前缀一致。
 
-This stage expects a SoccerMaster-compatible `.pklz` state archive containing
-`<video_id>.pkl` and `<video_id>_image.pkl`. The annotation JSON `video_id`
-must match that prefix.
+运行：
 
 ```bash
 python scripts/restore_foreground.py \
@@ -202,48 +291,73 @@ python scripts/restore_foreground.py \
   --output-dir outputs/final
 ```
 
-The final video is written to:
+最终视频：
 
 ```text
 outputs/final/final_replacement.mp4
 ```
 
-## Annotation tips
+其他输出：
 
-- Use approximately 5–12 well-distributed positive points per object/keyframe.
-- Place negative points above, below, and outside the billboard boundary.
-- Add a keyframe after a hard camera cut, strong tracking drift, re-entry, or
-  advertisement appearance change.
-- More points are not always better; accurate and non-conflicting points matter
-  more than point count.
+```text
+outputs/final/foreground_masks/
+outputs/final/final_frames/
+outputs/final/foreground_summary.json
+```
 
-## Current limitations
+## 为什么不直接使用逐帧相机标定投影
 
-- Manual conditioning frames are still required.
-- The fitted billboard is approximated as a long quadrilateral.
-- Hard cuts require additional prompts or future shot-boundary detection.
-- Foreground restoration depends on detector recall.
-- Goalposts, nets, balls, and staff are not yet handled as separate occluders.
-- No multi-dataset quantitative benchmark has been completed yet.
+相机标定与球场配准可以提供广告的大致搜索区域和异常检查依据，但真实转播视频中的逐帧标定可能存在轻微抖动，广告牌也不一定严格符合标准球场边界模型。
 
-## Roadmap
+因此当前最终定位采用：
 
-- Automatic shot-boundary detection.
-- Automatic billboard proposal detection.
-- Tracking confidence and drift alerts.
-- Goalpost, net, and ball occlusion handling.
-- Illumination, motion-blur, and compression matching.
-- Batch processing, caching, and resumable runs.
-- Quantitative IoU, boundary, jitter, and runtime evaluation.
+```text
+SAM2 Video多关键帧跟踪
+→ PCA连续广告带拟合
+→ 四边形时间平滑
+→ 分平面透视贴图
+```
 
-## Third-party projects and data
+相机标定结果更适合作为辅助信息，而不是最终广告边缘的唯一来源。
 
-This project interoperates with third-party projects and datasets but does not
-redistribute their source code, model weights, or data. Read
-`THIRD_PARTY_LICENSES.md` before use or redistribution.
+## 当前局限
 
-## License
+- 仍需要人工选择关键帧并添加提示点；
+- 广告区域被近似为细长四边形，不适合弧形屏或严重折叠表面；
+- 硬镜头切换通常需要增加新的关键帧；
+- 前景恢复效果依赖 SoccerMaster 人员检测召回率；
+- 球门柱、球网、足球和场边工作人员尚未单独处理；
+- 尚未完成多数据集定量评测；
+- 当前实现不是实时系统。
 
-Original code in this repository is released under the MIT License. See
-`LICENSE`. This license does not override the licenses or terms of third-party
-projects, model weights, datasets, or media. See `THIRD_PARTY_LICENSES.md`.
+## 后续计划
+
+- 自动镜头切分；
+- 自动广告候选区域检测；
+- 跟踪置信度和漂移报警；
+- 自动推荐需要补充标注的关键帧；
+- 球门柱、球网和足球遮挡恢复；
+- 曝光、白平衡、运动模糊与压缩伪影匹配；
+- 多视频批处理、缓存和断点续跑；
+- 广告 IoU、边界准确率、时间抖动和运行效率评测。
+
+## 第三方项目和数据
+
+本项目会与下列第三方项目或数据格式衔接，但不重新分发它们的源码、模型权重或数据：
+
+- [SAM2](https://github.com/facebookresearch/sam2)
+- [SoccerMaster](https://github.com/haolinyang-hlyang/SoccerMaster)
+- [SoccerNet](https://www.soccer-net.org/)
+
+截至 2026-08-29，GitHub License API 未在 SoccerMaster 仓库中检测到许可证文件。因此，请勿在没有明确许可证或作者许可的情况下复制、修改后重新发布 SoccerMaster 源码。
+
+比赛视频、拆分帧、数据集缓存和商业广告素材可能受到数据条款或版权限制，请仅使用自行拍摄、公开领域或具有明确授权的演示材料。
+
+详细说明见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+
+## 许可证
+
+本仓库中的原创代码使用 [MIT License](LICENSE)。
+
+MIT 许可证不覆盖第三方源码、模型权重、数据集、比赛画面或商业广告素材，它们仍遵循各自的许可证和使用条款。
+
