@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Environments and editors
+.venv/
+venv/
+env/
+conda-envs/
+.idea/
+.vscode/
+.ipynb_checkpoints/
+
+# Local data and generated results
+data/
+datasets/
+outputs/
+output/
+masks/
+runs/
+private/
+assets/private/
+
+# Model weights and serialized state
+checkpoints/
+pretrained_models/
+weights/
+*.pt
+*.pth
+*.pth.tar
+*.ckpt
+*.pkl
+*.pklz
+*.npy
+*.npz
+
+# Video files and temporary frame folders
+frames/
+videos/
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Local configuration and secrets
+.env
+.env.*
+config.local.*
+configs/local.*
+
+# Operating-system files
+.DS_Store
+Thumbs.db

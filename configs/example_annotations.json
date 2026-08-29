@@ -1,0 +1,32 @@
+{
+  "video_id": "demo_video",
+  "frame_count": 3,
+  "coordinate_system": "original_image_pixels",
+  "object_names": {
+    "1": "far_touchline_billboard",
+    "2": "left_goal_line_billboard"
+  },
+  "annotations": [
+    {
+      "frame_index": 0,
+      "image_name": "000001.jpg",
+      "object_id": 1,
+      "object_name": "far_touchline_billboard",
+      "points": [[320, 210], [640, 220], [960, 230], [640, 170], [640, 280]],
+      "labels": [1, 1, 1, 0, 0],
+      "positive_count": 3,
+      "negative_count": 2
+    },
+    {
+      "frame_index": 2,
+      "image_name": "000003.jpg",
+      "object_id": 1,
+      "object_name": "far_touchline_billboard",
+      "points": [[330, 212], [650, 222], [970, 232], [650, 172], [650, 282]],
+      "labels": [1, 1, 1, 0, 0],
+      "positive_count": 3,
+      "negative_count": 2
+    }
+  ]
+}
+

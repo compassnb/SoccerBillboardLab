@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Soccer Billboard Multi-frame Annotator</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #101318; color: #eef2f7; }
+    header { padding: 14px 20px; background: #171c24; border-bottom: 1px solid #303847; }
+    h1 { margin: 0 0 6px; font-size: 20px; }
+    header p { margin: 0; color: #aeb8c7; font-size: 13px; }
+    main { display: grid; grid-template-columns: 320px minmax(0, 1fr); min-height: calc(100vh - 72px); }
+    aside { padding: 16px; border-right: 1px solid #303847; overflow-y: auto; }
+    section { padding: 14px; }
+    .card { background: #191f29; border: 1px solid #303847; border-radius: 9px; padding: 12px; margin-bottom: 12px; }
+    .card h2 { margin: 0 0 10px; font-size: 14px; }
+    label { display: block; margin: 8px 0 4px; color: #c9d1dc; font-size: 12px; }
+    input, select, button { width: 100%; min-height: 34px; border-radius: 6px; border: 1px solid #445065; background: #11161d; color: #eef2f7; padding: 6px 9px; }
+    input[type="radio"] { width: auto; min-height: auto; }
+    input[type="range"] { padding: 0; }
+    button { cursor: pointer; background: #273247; }
+    button:hover { background: #33415b; }
+    .primary { background: #246bfe; border-color: #246bfe; }
+    .danger { background: #6d2832; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .radio-row { display: flex; gap: 16px; align-items: center; }
+    .radio-row label { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+    .status { white-space: pre-wrap; color: #9fabc0; font: 12px/1.5 ui-monospace, monospace; }
+    .canvas-wrap { min-height: 500px; display: grid; place-items: center; overflow: auto; background: #07090d; border: 1px solid #303847; border-radius: 9px; }
+    canvas { max-width: 100%; height: auto; display: block; cursor: crosshair; }
+    .toolbar { display: grid; grid-template-columns: 90px minmax(180px, 1fr) 90px 110px; gap: 8px; align-items: center; margin-bottom: 10px; }
+    .toolbar span { text-align: center; font: 13px ui-monospace, monospace; }
+    .hint { margin-top: 9px; color: #9fabc0; font-size: 12px; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid #303847; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Soccer Billboard Multi-frame Annotator</h1>
+    <p>图片只在本地浏览器中读取，不会上传，也不会嵌入导出的 JSON。</p>
+  </header>
+  <main>
+    <aside>
+      <div class="card">
+        <h2>1. 载入视频帧</h2>
+        <label for="frameFiles">选择图片文件夹（Chrome / Edge）</label>
+        <input id="frameFiles" type="file" accept="image/*" multiple webkitdirectory directory>
+        <label for="videoId">视频 ID</label>
+        <input id="videoId" value="demo_video">
+      </div>
+
+      <div class="card">
+        <h2>2. 选择广告对象</h2>
+        <label for="objectSelect">对象</label>
+        <select id="objectSelect"></select>
+        <label for="objectId">对象 ID</label>
+        <input id="objectId" type="number" min="1" value="1">
+        <label for="objectName">对象名称</label>
+        <input id="objectName" value="far_touchline_billboard">
+        <div class="row" style="margin-top:8px">
+          <button id="saveObject">保存/更新</button>
+          <button id="deleteObject" class="danger">删除对象</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>3. 添加提示点</h2>
+        <div class="radio-row">
+          <label><input type="radio" name="labelMode" value="1" checked>正样本</label>
+          <label><input type="radio" name="labelMode" value="0">负样本</label>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="undoPoint">撤销最后一点</button>
+          <button id="clearPoints" class="danger">清空当前帧</button>
+        </div>
+        <p class="hint">左键按当前模式添加；右键始终添加负样本。坐标保存为原图像素。</p>
+      </div>
+
+      <div class="card">
+        <h2>4. 导入/导出</h2>
+        <label for="importJson">导入已有 JSON 继续编辑</label>
+        <input id="importJson" type="file" accept="application/json,.json">
+        <div class="row" style="margin-top:8px">
+          <button id="exportJson" class="primary">导出全部 JSON</button>
+          <button id="copyJson">复制 JSON</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>状态</h2>
+        <div id="status" class="status">尚未载入图片。</div>
+      </div>
+    </aside>
+
+    <section>
+      <div class="toolbar">
+        <button id="previousFrame">上一帧</button>
+        <input id="frameSlider" type="range" min="1" max="1" value="1">
+        <button id="nextFrame">下一帧</button>
+        <input id="frameNumber" type="number" min="1" max="1" value="1">
+      </div>
+      <div id="frameLabel" style="margin-bottom:8px;color:#c8d1df">未载入图片</div>
+      <div class="canvas-wrap"><canvas id="canvas"></canvas></div>
+      <div class="hint">快捷键：←/→ 切换帧，P 正样本，N 负样本，Ctrl+Z 撤销。</div>
+    </section>
+  </main>
+
+  <script>
+    "use strict";
+
+    const defaultObjects = {
+      1: "far_touchline_billboard",
+      2: "left_goal_line_billboard",
+      3: "right_goal_line_billboard",
+      4: "near_touchline_billboard"
+    };
+
+    let frames = [];
+    let objectNames = {...defaultObjects};
+    let annotations = new Map();
+    let currentFrame = 0;
+    let currentObject = 1;
+    let currentImage = null;
+    let loadSequence = 0;
+
+    const canvas = document.getElementById("canvas");
+    const context = canvas.getContext("2d");
+    const frameFiles = document.getElementById("frameFiles");
+    const frameSlider = document.getElementById("frameSlider");
+    const frameNumber = document.getElementById("frameNumber");
+    const frameLabel = document.getElementById("frameLabel");
+    const objectSelect = document.getElementById("objectSelect");
+    const objectId = document.getElementById("objectId");
+    const objectName = document.getElementById("objectName");
+    const status = document.getElementById("status");
+
+    function naturalCompare(a, b) {
+      return a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: "base"});
+    }
+
+    function keyFor(frameIndex, id) {
+      return `${frameIndex}:${id}`;
+    }
+
+    function currentRecord(create = false) {
+      const key = keyFor(currentFrame, currentObject);
+      if (!annotations.has(key) && create) {
+        annotations.set(key, {points: [], labels: []});
+      }
+      return annotations.get(key);
+    }
+
+    function refreshObjectSelect() {
+      objectSelect.innerHTML = "";
+      Object.keys(objectNames).map(Number).sort((a, b) => a - b).forEach(id => {
+        const option = document.createElement("option");
+        option.value = String(id);
+        option.textContent = `${id}: ${objectNames[id]}`;
+        objectSelect.appendChild(option);
+      });
+      if (!(currentObject in objectNames)) {
+        currentObject = Number(Object.keys(objectNames)[0] || 1);
+      }
+      objectSelect.value = String(currentObject);
+      objectId.value = String(currentObject);
+      objectName.value = objectNames[currentObject] || "billboard";
+    }
+
+    function setMode(value) {
+      const radio = document.querySelector(`input[name="labelMode"][value="${value}"]`);
+      if (radio) radio.checked = true;
+    }
+
+    function selectedLabel() {
+      return Number(document.querySelector('input[name="labelMode"]:checked').value);
+    }
+
+    function draw() {
+      if (!currentImage) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
+      canvas.width = currentImage.naturalWidth;
+      canvas.height = currentImage.naturalHeight;
+      context.drawImage(currentImage, 0, 0);
+
+      const record = currentRecord(false);
+      if (record) {
+        record.points.forEach((point, index) => {
+          const positive = Number(record.labels[index]) === 1;
+          context.beginPath();
+          context.arc(point[0], point[1], 7, 0, Math.PI * 2);
+          context.fillStyle = positive ? "rgba(0,255,80,.88)" : "rgba(255,55,55,.88)";
+          context.fill();
+          context.lineWidth = 2;
+          context.strokeStyle = "white";
+          context.stroke();
+          context.fillStyle = "black";
+          context.font = "bold 11px sans-serif";
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText(positive ? "+" : "−", point[0], point[1]);
+        });
+      }
+      updateStatus();
+    }
+
+    function loadCurrentFrame() {
+      if (!frames.length) return;
+      currentFrame = Math.max(0, Math.min(frames.length - 1, currentFrame));
+      frameSlider.value = String(currentFrame + 1);
+      frameNumber.value = String(currentFrame + 1);
+      frameLabel.textContent = `Frame ${currentFrame + 1}/${frames.length} — ${frames[currentFrame].name}`;
+      const sequence = ++loadSequence;
+      const image = new Image();
+      image.onload = () => {
+        if (sequence !== loadSequence) return;
+        currentImage = image;
+        draw();
+      };
+      image.onerror = () => alert(`无法读取图片：${frames[currentFrame].name}`);
+      image.src = frames[currentFrame].url;
+    }
+
+    function goToFrame(oneBased) {
+      if (!frames.length) return;
+      currentFrame = Math.max(0, Math.min(frames.length - 1, Number(oneBased) - 1));
+      loadCurrentFrame();
+    }
+
+    function updateStatus() {
+      let positive = 0;
+      let negative = 0;
+      const current = currentRecord(false);
+      if (current) {
+        positive = current.labels.filter(value => Number(value) === 1).length;
+        negative = current.labels.filter(value => Number(value) === 0).length;
+      }
+      const records = [...annotations.values()].filter(item => item.points.length > 0).length;
+      const objects = new Set(
+        [...annotations.entries()].filter(([, item]) => item.points.length > 0)
+          .map(([key]) => Number(key.split(":")[1]))
+      );
+      status.textContent = [
+        `图片：${frames.length}`,
+        `已标注对象：${objects.size}`,
+        `对象-关键帧记录：${records}`,
+        `当前帧正样本：${positive}`,
+        `当前帧负样本：${negative}`
+      ].join("\n");
+    }
+
+    function exportData() {
+      const records = [];
+      [...annotations.entries()].forEach(([key, record]) => {
+        if (!record.points.length) return;
+        const [frameIndexText, objectIdText] = key.split(":");
+        const frameIndex = Number(frameIndexText);
+        const id = Number(objectIdText);
+        records.push({
+          frame_index: frameIndex,
+          image_name: frames[frameIndex]?.name || `frame_${frameIndex + 1}`,
+          object_id: id,
+          object_name: objectNames[id] || `object_${id}`,
+          points: record.points.map(point => point.map(value => Math.round(value))),
+          labels: record.labels.map(Number),
+          positive_count: record.labels.filter(value => Number(value) === 1).length,
+          negative_count: record.labels.filter(value => Number(value) === 0).length
+        });
+      });
+      records.sort((a, b) => a.frame_index - b.frame_index || a.object_id - b.object_id);
+      return {
+        video_id: document.getElementById("videoId").value.trim() || "video",
+        frame_count: frames.length,
+        coordinate_system: "original_image_pixels",
+        object_names: Object.fromEntries(
+          Object.keys(objectNames).map(Number).sort((a, b) => a - b)
+            .map(id => [String(id), objectNames[id]])
+        ),
+        annotations: records
+      };
+    }
+
+    frameFiles.addEventListener("change", event => {
+      frames.forEach(frame => URL.revokeObjectURL(frame.url));
+      frames = [...event.target.files]
+        .filter(file => file.type.startsWith("image/"))
+        .sort(naturalCompare)
+        .map(file => ({name: file.name, url: URL.createObjectURL(file)}));
+      currentFrame = 0;
+      frameSlider.max = String(Math.max(1, frames.length));
+      frameNumber.max = String(Math.max(1, frames.length));
+      currentImage = null;
+      if (frames.length) loadCurrentFrame();
+      updateStatus();
+    });
+
+    canvas.addEventListener("click", event => {
+      if (!currentImage) return;
+      const rectangle = canvas.getBoundingClientRect();
+      const x = (event.clientX - rectangle.left) * canvas.width / rectangle.width;
+      const y = (event.clientY - rectangle.top) * canvas.height / rectangle.height;
+      const record = currentRecord(true);
+      record.points.push([x, y]);
+      record.labels.push(selectedLabel());
+      draw();
+    });
+
+    canvas.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      if (!currentImage) return;
+      const rectangle = canvas.getBoundingClientRect();
+      const x = (event.clientX - rectangle.left) * canvas.width / rectangle.width;
+      const y = (event.clientY - rectangle.top) * canvas.height / rectangle.height;
+      const record = currentRecord(true);
+      record.points.push([x, y]);
+      record.labels.push(0);
+      draw();
+    });
+
+    objectSelect.addEventListener("change", () => {
+      currentObject = Number(objectSelect.value);
+      objectId.value = String(currentObject);
+      objectName.value = objectNames[currentObject];
+      draw();
+    });
+
+    document.getElementById("saveObject").addEventListener("click", () => {
+      const id = Number(objectId.value);
+      const name = objectName.value.trim();
+      if (!Number.isInteger(id) || id < 1 || !name) {
+        alert("对象 ID 必须是正整数，名称不能为空。");
+        return;
+      }
+      objectNames[id] = name;
+      currentObject = id;
+      refreshObjectSelect();
+      draw();
+    });
+
+    document.getElementById("deleteObject").addEventListener("click", () => {
+      if (Object.keys(objectNames).length <= 1) {
+        alert("至少保留一个对象。");
+        return;
+      }
+      if (!confirm(`删除对象 ${currentObject} 及其全部标注？`)) return;
+      delete objectNames[currentObject];
+      [...annotations.keys()].forEach(key => {
+        if (Number(key.split(":")[1]) === currentObject) annotations.delete(key);
+      });
+      currentObject = Number(Object.keys(objectNames)[0]);
+      refreshObjectSelect();
+      draw();
+    });
+
+    document.getElementById("undoPoint").addEventListener("click", () => {
+      const record = currentRecord(false);
+      if (record?.points.length) {
+        record.points.pop();
+        record.labels.pop();
+        draw();
+      }
+    });
+
+    document.getElementById("clearPoints").addEventListener("click", () => {
+      const record = currentRecord(false);
+      if (record?.points.length && confirm("清空当前对象在当前帧的所有点？")) {
+        annotations.delete(keyFor(currentFrame, currentObject));
+        draw();
+      }
+    });
+
+    document.getElementById("previousFrame").addEventListener("click", () => goToFrame(currentFrame));
+    document.getElementById("nextFrame").addEventListener("click", () => goToFrame(currentFrame + 2));
+    frameSlider.addEventListener("input", () => goToFrame(frameSlider.value));
+    frameNumber.addEventListener("change", () => goToFrame(frameNumber.value));
+
+    document.getElementById("exportJson").addEventListener("click", () => {
+      const data = JSON.stringify(exportData(), null, 2);
+      const blob = new Blob([data], {type: "application/json"});
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "board_annotations.json";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+
+    document.getElementById("copyJson").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(exportData(), null, 2));
+        alert("JSON 已复制。");
+      } catch (error) {
+        alert(`复制失败：${error.message}`);
+      }
+    });
+
+    document.getElementById("importJson").addEventListener("change", async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const data = JSON.parse(await file.text());
+        objectNames = Object.fromEntries(
+          Object.entries(data.object_names || defaultObjects).map(([id, name]) => [Number(id), String(name)])
+        );
+        annotations = new Map();
+        (data.annotations || []).forEach(record => {
+          const key = keyFor(Number(record.frame_index), Number(record.object_id));
+          const existing = annotations.get(key) || {points: [], labels: []};
+          existing.points.push(...record.points.map(point => [Number(point[0]), Number(point[1])]));
+          existing.labels.push(...record.labels.map(Number));
+          annotations.set(key, existing);
+        });
+        if (data.video_id) document.getElementById("videoId").value = data.video_id;
+        currentObject = Number(Object.keys(objectNames)[0] || 1);
+        refreshObjectSelect();
+        draw();
+        alert("JSON 导入成功。请确保选择的图片目录与该 JSON 对应。");
+      } catch (error) {
+        alert(`JSON 导入失败：${error.message}`);
+      }
+    });
+
+    document.addEventListener("keydown", event => {
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      if (event.key === "ArrowLeft") goToFrame(currentFrame);
+      if (event.key === "ArrowRight") goToFrame(currentFrame + 2);
+      if (event.key.toLowerCase() === "p") setMode(1);
+      if (event.key.toLowerCase() === "n") setMode(0);
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        document.getElementById("undoPoint").click();
+      }
+    });
+
+    refreshObjectSelect();
+    updateStatus();
+  </script>
+</body>
+</html>
