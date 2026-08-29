@@ -244,6 +244,6 @@ redistribute their source code, model weights, or data. Read
 
 ## License
 
-No license is granted until a `LICENSE` file is added by the repository owner.
-Choose a license only for code you own; it does not override third-party terms.
-
+Original code in this repository is released under the MIT License. See
+`LICENSE`. This license does not override the licenses or terms of third-party
+projects, model weights, datasets, or media. See `THIRD_PARTY_LICENSES.md`.
