@@ -264,7 +264,7 @@ configs/example_ad_map.json
 --ad-map configs/ad_map.json
 ```
 
-## 第五步：恢复人物前景遮挡（可选）
+## 第五步：恢复人物前景遮挡
 
 如果已经拥有 SoccerMaster 输出的 `.pklz` 状态文件，可以用检测框驱动 SAM2 Image，对真正与广告相交的运动员和裁判进行精细分割。
 
@@ -296,31 +296,4 @@ python scripts/restore_foreground.py \
 outputs/final/final_replacement.mp4
 ```
 
-其他输出：
-
-```text
-outputs/final/foreground_masks/
-outputs/final/final_frames/
-outputs/final/foreground_summary.json
-
-
-## 第三方项目和数据
-
-本项目会与下列第三方项目或数据格式衔接，但不重新分发它们的源码、模型权重或数据：
-
-- [SAM2](https://github.com/facebookresearch/sam2)
-- [SoccerMaster](https://github.com/haolinyang-hlyang/SoccerMaster)
-- [SoccerNet](https://www.soccer-net.org/)
-
-截至 2026-08-29，GitHub License API 未在 SoccerMaster 仓库中检测到许可证文件。因此，请勿在没有明确许可证或作者许可的情况下复制、修改后重新发布 SoccerMaster 源码。
-
-比赛视频、拆分帧、数据集缓存和商业广告素材可能受到数据条款或版权限制，请仅使用自行拍摄、公开领域或具有明确授权的演示材料。
-
-详细说明见 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
-
-## 许可证
-
-本仓库中的原创代码使用 [MIT License](LICENSE)。
-
-MIT 许可证不覆盖第三方源码、模型权重、数据集、比赛画面或商业广告素材，它们仍遵循各自的许可证和使用条款。
 
